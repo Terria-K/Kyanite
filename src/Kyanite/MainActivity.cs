@@ -1,11 +1,12 @@
 ﻿using System;
-using System.IO;
 using System.Reflection;
 using Android.App;
 using Android.Content.PM;
 using Android.OS;
+using Android.Util;
 using Avalonia;
 using Avalonia.Android;
+using Kyanite.Services;
 
 namespace Kyanite.Android;
 
@@ -33,5 +34,40 @@ public class MainActivity : AvaloniaMainActivity<App>
     {
         return base.CustomizeAppBuilder(builder)
             .WithInterFont();
+    }
+}
+
+[Activity(Label = "Game Activity", ConfigurationChanges = ConfigChanges.Orientation, ScreenOrientation = ScreenOrientation.Landscape, Exported = true)]
+public class GameActivity : Activity
+{
+    protected override async void OnStart()
+    {
+        base.OnStart();
+
+        // since Nickelite makes Nickel a library, there's no longer an entry point
+        var nickelType = AppServices.NickelAsm.GetType("Nickel.Nickel");
+        if (nickelType is null)
+        {
+            return;
+        }
+
+        var entryPoint = nickelType.GetMethod("Main", BindingFlags.Static | BindingFlags.NonPublic);
+
+        try
+        {
+            Log.Error("Kyanite", "THE PATH IS: " + AppServices.GamePath);
+            string[] args = [AppServices.GamePath];
+            var code = entryPoint?.Invoke(null, [args]);
+            if (code is not null)
+            {
+                int c = (int)code;
+                Log.Error("Kyanite", "Status Code: " + c);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Kyanite", ex.ToString());
+        }
+
     }
 }

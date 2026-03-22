@@ -7,11 +7,20 @@
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
-    <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+
+    <!-- Diable AOT-->
+    <AndroidEnableProfiledAot>False</AndroidEnableProfiledAot>
+    <AndroidUseDefaultAotProfile>False</AndroidUseDefaultAotProfile>
+    <AndroidAotMode>None</AndroidAotMode>
+    <EnableLLVM>false</EnableLLVM>
+    <AndroidLinkMode>None</AndroidLinkMode>
+    <RunAOTCompilation>False</RunAOTCompilation>
+    <TieredCompilation>False</TieredCompilation>
+
+
     <OutputType>Exe</OutputType>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <RunAOTCompilation>false</RunAOTCompilation>
-    <TieredCompilation>false</TieredCompilation>
+
   </PropertyGroup>
 
   <ItemGroup>

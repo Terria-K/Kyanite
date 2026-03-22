@@ -3,10 +3,15 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using Android.Content;
 using Android.Util;
+using A = Android;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Kyanite.Android;
+using AndroidX.Core.App;
+using Android;
 
 namespace Kyanite.Views;
 
@@ -72,23 +77,35 @@ public partial class MainView : UserControl
                 return;
             }
 
+            var loadedAssembly = new Dictionary<string, Assembly>();
+
             AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
             {
+                var name = new AssemblyName(args.Name).Name + ".dll";
+                if (loadedAssembly.TryGetValue(name, out var asm))
+                {
+                    return asm;
+                }
+                
                 var existing = AppDomain.CurrentDomain
                     .GetAssemblies()
-                    .FirstOrDefault(a => a.FullName == args.Name);
+                    .FirstOrDefault(a =>
+                    {
+                        return a.FullName == args.Name;
+                    });
 
                 if (existing is not null)
                 {
                     return existing;
                 }
 
-                var name = new AssemblyName(args.Name).Name + ".dll";
 
                 if (assemblyFiles.TryGetValue(name, out var data))
                 {
-                    Log.Info("[Kyanite]", $"Loaded {name}");
-                    return Assembly.Load(data);
+                    Log.Error("[Kyanite]", $"Loaded {name}");
+                    var loadedASM = Assembly.Load(data);
+                    loadedAssembly.Add(name, loadedASM);
+                    return loadedASM;
                 }
 
                 Log.Error("[Kyanite]", $"Failed to load assembly name: {args.Name} from path: {name}");
@@ -96,13 +113,8 @@ public partial class MainView : UserControl
                 return null;
             };
 
-            // preloading the dependencies
-            Assembly.Load(assemblyFiles["PluginManager.dll"]);
-            Assembly.Load(assemblyFiles["NickelCommon.dll"]);
-            
-
             var assembly = Assembly.Load(nickelFile);
-            StartNickel(assembly);
+            StartNickel(Path.Combine(Uri.UnescapeDataString(directories[0].Path.AbsolutePath), "CobaltCore.exe"), assembly);
         }
         catch (Exception e)
         {
@@ -110,21 +122,23 @@ public partial class MainView : UserControl
         }
     }
 
-    private static void StartNickel(Assembly assembly)
+    private static void StartNickel(string gamePath, Assembly assembly)
     {
-        // since Nickelite makes Nickel a library, there's no longer an entry point
-        var nickelType = assembly.GetType("Nickel.Nickel");
-        if (nickelType is null)
-        {
-            return;
-        }
+#pragma warning disable CA1416 // Validate platform compatibility
+        ActivityCompat.RequestPermissions(MainActivity.Instance, [Manifest.Permission.ManageExternalStorage], 0);
+#pragma warning restore CA1416 // Validate platform compatibility
 
-        var entryPoint = nickelType.GetMethod("Main", BindingFlags.Static | BindingFlags.NonPublic);
-        var code = entryPoint?.Invoke(null, [Array.Empty<string>()]);
-        if (code is not null)
+        if (gamePath.StartsWith("/tree/primary:"))
         {
-            int c = (int)code;
-            Log.Error("Kyanite", "Status Code: " + c);
+            string relative = gamePath["/tree/primary:".Length..];
+            string realPath = A.OS.Environment.ExternalStorageDirectory!.AbsolutePath 
+                            + "/" + relative.Replace(':','/');
+            Console.WriteLine(realPath);
+            Services.AppServices.GamePath = realPath;
         }
+        Services.AppServices.NickelAsm = assembly;
+
+        var intent = new Intent(MainActivity.Instance, typeof(GameActivity));
+        MainActivity.Instance.StartActivity(intent);
     }
 }
