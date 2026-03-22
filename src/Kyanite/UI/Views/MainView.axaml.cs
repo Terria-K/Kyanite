@@ -1,14 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using Android.Util;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using Kyanite.Android;
 
 namespace Kyanite.Views;
 
@@ -37,19 +35,6 @@ public partial class MainView : UserControl
         {
             return;
         }
-
-        // var assets = MainActivity.Instance.Application?.ApplicationContext?.Assets;
-        // var bcl = await assets!.ListAsync("dotnet_bcl");
-
-        // foreach (var l in bcl!)
-        // {
-        //     using var fs = assets.Open(Path.Combine("dotnet_bcl", l));
-        //     var targetFile = await directories[0].CreateFileAsync(l);
-
-        //     using var targetStream = await targetFile!.OpenWriteAsync();
-
-        //     await fs.CopyToAsync(targetStream);
-        // }
 
         try
         {
@@ -89,7 +74,17 @@ public partial class MainView : UserControl
 
             AppDomain.CurrentDomain.AssemblyResolve += (sender, args) =>
             {
+                var existing = AppDomain.CurrentDomain
+                    .GetAssemblies()
+                    .FirstOrDefault(a => a.FullName == args.Name);
+
+                if (existing is not null)
+                {
+                    return existing;
+                }
+
                 var name = new AssemblyName(args.Name).Name + ".dll";
+
                 if (assemblyFiles.TryGetValue(name, out var data))
                 {
                     Log.Info("[Kyanite]", $"Loaded {name}");
@@ -104,6 +99,7 @@ public partial class MainView : UserControl
             // preloading the dependencies
             Assembly.Load(assemblyFiles["PluginManager.dll"]);
             Assembly.Load(assemblyFiles["NickelCommon.dll"]);
+            
 
             var assembly = Assembly.Load(nickelFile);
             StartNickel(assembly);
@@ -116,63 +112,19 @@ public partial class MainView : UserControl
 
     private static void StartNickel(Assembly assembly)
     {
-        var Nickel = assembly.EntryPoint?.DeclaringType;
-        if (Nickel is null)
+        // since Nickelite makes Nickel a library, there's no longer an entry point
+        var nickelType = assembly.GetType("Nickel.Nickel");
+        if (nickelType is null)
         {
             return;
         }
 
-        var newEntry = Nickel.GetMethod("CreateAndStartInstance", BindingFlags.Static | BindingFlags.NonPublic);
-        var launchArguments = new LaunchArguments()
+        var entryPoint = nickelType.GetMethod("Main", BindingFlags.Static | BindingFlags.NonPublic);
+        var code = entryPoint?.Invoke(null, [Array.Empty<string>()]);
+        if (code is not null)
         {
-            InitSteam = false
-        };
-
-        var nickelLaunchArguments = Nickel.Assembly.GetType("Nickel.LaunchArguments");
-        var passable = MapStructFields(launchArguments, nickelLaunchArguments!);
-
-        // FIXME: Investigate Method not found: !!0 Nickel.Common.SettingsUtilities.ReadSettings<!0>
-        newEntry!.Invoke(null, [passable, Stopwatch.StartNew()]);
-    }
-
-    public static object MapStructFields(object sourceStruct, Type targetType)
-    {
-        var sourceType = sourceStruct.GetType();
-        var targetInstance = Activator.CreateInstance(targetType)!;
-
-        foreach (var field in targetType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
-        {
-            var sourceField = sourceType.GetField(field.Name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-            if (sourceField != null)
-            {
-                var value = sourceField.GetValue(sourceStruct);
-                field.SetValue(targetInstance, value);
-            }
+            int c = (int)code;
+            Log.Error("Kyanite", "Status Code: " + c);
         }
-
-        return targetInstance;
     }
-}
-
-internal readonly struct LaunchArguments
-{
-	public bool Vanilla { get; init; }
-	public bool? Debug { get; init; }
-	public bool? SaveInDebug { get; init; }
-	public bool? InitSteam { get; init; }
-	public FileInfo? GamePath { get; init; }
-	public DirectoryInfo? ModsPath { get; init; }
-	public DirectoryInfo? InternalModsPath { get; init; }
-	public DirectoryInfo? ModStoragePath { get; init; }
-	public DirectoryInfo? PrivateModStoragePath { get; init; }
-	public DirectoryInfo? SavePath { get; init; }
-	public DirectoryInfo? LogPath { get; init; }
-	public DirectoryInfo? AssemblyCachePath { get; init; }
-	public string? AttachDebuggerBeforeMod { get; init; }
-	public string? AttachDebuggerAfterMod { get; init; }
-	public string? AttachDebuggerBeforeModLoadPhase { get; init; }
-	public string? AttachDebuggerAfterModLoadPhase { get; init; }
-	public bool? TimestampedLogFiles { get; init; }
-	public string? LogPipeName { get; init; }
-	public IReadOnlyList<string> UnmatchedArguments { get; init; }
 }

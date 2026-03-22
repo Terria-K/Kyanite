@@ -1,0 +1,3 @@
+[submodule "Nickelite"]
+	path = Nickelite
+	url = git@github.com:TeuriaGames/Nickelite.git
